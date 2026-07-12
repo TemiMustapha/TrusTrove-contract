@@ -88,6 +88,65 @@ fn test_revoke_sets_verified_false() {
 }
 
 #[test]
+#[should_panic]
+fn test_revoke_non_admin_panics() {
+    // Constructs Env without `mock_all_auths` so the admin auth path is
+    // actually exercised. A caller that has not authorized as admin
+    // must not be able to revoke another profile — the call must panic.
+    let env = Env::default();
+    let contract_id = env.register_contract(None, RegistryContract);
+    let client = RegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let issuer = Address::generate(&env);
+
+    // Set up admin + registered issuer using mocked auths.
+    env.mock_all_auths();
+    client.initialize(&admin);
+    client.register_issuer(&issuer, &map![&env]);
+
+    // Drop all mocked auths — no address has authorized anything. The
+    // revoke call requires the admin's signature and must panic.
+    env.mock_auths(&[]);
+    client.revoke(&issuer);
+}
+
+#[test]
+fn test_revoke_non_admin_leaves_profile_unchanged() {
+    // Companion to `test_revoke_non_admin_panics`: with no admin auth in
+    // place, revoke must fail *and* leave the profile state intact.
+    let env = Env::default();
+    let contract_id = env.register_contract(None, RegistryContract);
+    let client = RegistryContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let issuer = Address::generate(&env);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+    client.register_issuer(&issuer, &map![&env]);
+    let profile_before = client.get_profile(&issuer);
+    assert!(profile_before.verified());
+
+    // Non-admin (empty auth set) tries to revoke — the generated
+    // `try_revoke` returns an error instead of panicking so we can
+    // observe post-state.
+    env.mock_auths(&[]);
+    let result = client.try_revoke(&issuer);
+    assert!(result.is_err(), "revoke without admin auth must fail");
+
+    // Profile state must be unchanged.
+    let profile_after = client.get_profile(&issuer);
+    assert_eq!(profile_before.role(), profile_after.role());
+    assert_eq!(profile_before.verified(), profile_after.verified());
+    assert!(client.is_verified(&issuer));
+    assert_eq!(
+        client.get_verification_status(&issuer),
+        VerificationStatus::Verified
+    );
+}
+
+#[test]
 fn test_update_metadata_self_succeeds() {
     let (env, client) = setup();
     let admin = Address::generate(&env);
