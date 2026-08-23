@@ -1379,6 +1379,29 @@ impl InvoiceContract {
         Self::get_invoice(&env, invoice_id).funding_asset
     }
 
+    /// Retrieves the stored attestation for an invoice, if any.
+    ///
+    /// # Arguments
+    /// * `env` - The Soroban environment.
+    /// * `invoice_id` - The invoice to query.
+    ///
+    /// # Auth
+    /// No authorization is required.
+    ///
+    /// # Returns
+    /// * `Option<Attestation>` - `None` if `submit_attestation` has not been
+    ///   called for this invoice yet.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let attestation = client.get_attestation(&invoice_id);
+    /// ```
+    pub fn get_attestation(env: Env, invoice_id: BytesN<32>) -> Option<Attestation> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Attestation(invoice_id))
+    }
+
     /// Retrieves the full invoice record by ID.
     ///
     /// # Arguments
